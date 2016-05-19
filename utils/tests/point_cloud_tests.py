@@ -25,7 +25,7 @@ def test_instantiation():
     # this should work
     cloud = point_clouds.FlexCloud(good_geometry)
     assert np.array_equal(cloud.corner, good_geometry[0]), "didn't store the corner"
-    assert np.array_equal(cloud.geometry + cloud.corner, good_geometry),\
+    assert np.array_equal(cloud.points + cloud.corner, good_geometry),\
         "didn't subtract the corner"
     assert hasattr(cloud, "assets"), "cloud didn't make an asset directory"
     assert cloud.num_points == good_geometry.shape[0], "cloud didn't count right number of points"
@@ -52,7 +52,7 @@ def test_instantiation():
     except ValueError:
         pass
     else:
-        raise AssertionError("accepted geometry with incorrect array shape")
+        raise AssertionError("accepted points with incorrect array shape")
 
 #---------------------------------------------------------------------------------------------------
 
@@ -61,8 +61,8 @@ def test_add_asset():
     test adding assets to the FlexCloud. it should sort/ make unique.
     """
 
-    geometry = np.random.rand(1000, 3)
-    cloud = point_clouds.FlexCloud(geometry)
+    points = np.random.rand(1000, 3)
+    cloud = point_clouds.FlexCloud(points)
 
     asset_1 = np.random.rand(100, 2)
     asset_1_idx = np.random.permutation(1000)[:100]
@@ -110,9 +110,8 @@ def test_intersection():
     test intersecting the assets
     """
 
-
-    geometry = np.random.rand(1000, 3)
-    cloud = point_clouds.FlexCloud(geometry)
+    points = np.random.rand(1000, 3)
+    cloud = point_clouds.FlexCloud(points)
 
     asset_1 = np.random.rand(100, 2)
     asset_1_idx = np.arange(100)
@@ -129,10 +128,25 @@ def test_intersection():
     assert np.array_equal(known_idx, test_idx), "intersection produced wrong index set"
     assert np.array_equal(known_asset, test_asset), "intersection produced wrong asset block"
 
+#---------------------------------------------------------------------------------------------------
 
+def test_take():
+    """
+    .take should function like ndarray.take, but add the corner back to the points
+    """
+
+    points = np.random.rand(1000, 3)
+    cloud = point_clouds.FlexCloud(points)
+
+    idx = np.random.permutation(1000)[:100]
+    assert np.array_equal(cloud.take(idx), points.take(idx, axis=0)), "take failed with given idx"
+    assert np.array_equal(cloud.take(), points), "take failed with no idx given"
 
 #---------------------------------------------------------------------------------------------------
 
+
+
+#---------------------------------------------------------------------------------------------------
 
 
 if __name__ == '__main__':
@@ -146,5 +160,8 @@ if __name__ == '__main__':
     print("testing asset intersection")
     test_intersection()
     print("intersection operation tests out")
+    print("testing take")
+    test_take()
+    print("take took")
 
 

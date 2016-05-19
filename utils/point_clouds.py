@@ -12,7 +12,7 @@ class FlexCloud(object):
     """
     given a 3d point cloud as a 2d numpy array, shift its points close to the origin and track its
     features. any supplemental information must be added separately, after the object has been 
-    instantiated with its geometry. supplemental information is stored as "assets" which can be 
+    instantiated with its points. supplemental information is stored as "assets" which can be 
     1d or 2d arrays of floats or integers.
 
     the asset index dictionary looks like the following:
@@ -53,7 +53,7 @@ class FlexCloud(object):
             raise ValueError("must be initialized with a 3D point cloud")
         # now bring the point cloud in to the origin
         self.corner = input_cloud[0]
-        self.geometry = input_cloud - self.corner
+        self.points = input_cloud - self.corner
         # count how many points we have in the original point cloud
         self.num_points = input_cloud.shape[0]
         self.id_index = np.arange(self.num_points)
@@ -140,13 +140,15 @@ class FlexCloud(object):
 
     #==================================
 
-    def take(self, index_array):
+    def take(self, index_array=None):
         """
-        equivalent to ndarray.take(). return a subset of the FlexCloud's geometry addressed by an
-        index array, in the original coordinates.
+        equivalent to ndarray.take(). return a subset of the FlexCloud's points addressed by an
+        index array, in the original coordinates. if no index given, return all.
         """
-
-        return self.geometry.take(index_array, axis=0) + self.corner
+        if index_array is not None:
+            return self.points.take(index_array, axis=0) + self.corner
+        else:
+            return self.points + self.corner
 
     #==================================
 
