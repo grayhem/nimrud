@@ -132,7 +132,7 @@ def test_intersection():
 
 def test_take():
     """
-    .take should function like ndarray.take, but add the corner back to the points
+    .take should function like ndarray.take, but add the corner back to the points (if told to)
     """
 
     points = np.random.rand(1000, 3)
@@ -141,6 +141,14 @@ def test_take():
     idx = np.random.permutation(1000)[:100]
     assert np.array_equal(cloud.take(idx), points.take(idx, axis=0)), "take failed with given idx"
     assert np.array_equal(cloud.take(), points), "take failed with no idx given"
+
+    off_center_points = points - points[0]
+    assert np.array_equal(
+        cloud.take(idx, original_coordinates=False),
+        off_center_points.take(idx, axis=0)), "take failed with given idx and centering"
+    assert np.array_equal(
+        cloud.take(original_coordinates=False),
+        off_center_points), "take failed with no idx and centering"
 
 #---------------------------------------------------------------------------------------------------
 

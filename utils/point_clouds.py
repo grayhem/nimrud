@@ -140,15 +140,19 @@ class FlexCloud(object):
 
     #==================================
 
-    def take(self, index_array=None):
+    def take(self, index_array=None, original_coordinates=True):
         """
         equivalent to ndarray.take(). return a subset of the FlexCloud's points addressed by an
-        index array, in the original coordinates. if no index given, return all.
+        index array, in the original coordinates if desired. if no index given, return all.
         """
-        if index_array is not None:
-            return self.points.take(index_array, axis=0) + self.corner
+        if original_coordinates:
+            return_points = self.points + self.corner
         else:
-            return self.points + self.corner
+            return_points = self.points
+        if index_array is not None:
+            return return_points.take(index_array, axis=0)
+        else:
+            return return_points
 
     #==================================
 

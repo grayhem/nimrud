@@ -151,7 +151,8 @@ def test_in_bounds():
             """
             try:
                 vf._check_in_bounds(point)
-            except ValueError:
+            except ValueError as err:
+                # print(err)
                 return False
             else:
                 return True
@@ -162,7 +163,8 @@ def test_in_bounds():
         assert check_in_bounds(np.zeros((1, dim)) + 100.5), "should be in bounds"
         assert not check_in_bounds(np.zeros((1, dim)) + 101.5), "should not be in bounds"
         assert not check_in_bounds(np.zeros((1, dim+1))), "should not be in bounds"
-        assert not check_in_bounds(np.zeros(dim)), "should not be in bounds"
+        assert check_in_bounds(np.zeros(dim)), "should be in bounds"
+        assert not check_in_bounds(np.zeros(dim+1)), "should be in bounds"
 
 #---------------------------------------------------------------------------------------------------
 
@@ -205,6 +207,7 @@ def test_voxel_transform():
     """
     convert integer addresses to point coordinates
     """
+    assert 1==2
 
 #---------------------------------------------------------------------------------------------------
 
@@ -212,6 +215,7 @@ def test_voxel_unique():
     """
     convert point coordinates to integer addresses, unique and convert back to point coordinates
     """
+    assert 1==2
 
 #---------------------------------------------------------------------------------------------------
 

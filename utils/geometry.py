@@ -62,25 +62,44 @@ class VoxelFilter(object):
     def _check_in_bounds(self, points):
         """
         confirm that any new collection of points to be used with this voxel filter is within its
-        bounds and shaped correctly with the right number of spatial dimensions
+        bounds with the right number of spatial dimensions
         """
 
-        if points.ndim != 2:
+        check_points = np.atleast_2d(points)
+
+        if check_points.ndim != 2:
             raise ValueError("wrong array shape")
-        if points.shape[1] != self.shifts.size+1:
+        if check_points.shape[1] != self.shifts.size+1:
             raise ValueError("wrong number of spatial dimensions")
-        if np.any(points.min(0) < self.minimum_corner)\
-            or np.any(points.max(0) > self.maximum_corner):
+        if np.any(check_points.min(0) < self.minimum_corner)\
+            or np.any(check_points.max(0) > self.maximum_corner):
             raise ValueError("some points fall outside filter bounding region")
+
+        return check_points
 
     #==================================
 
     def coordinate_to_address(self, points):
         """
-        transform coordinates into the 
+        transform real-world coordinates into voxel coordinates and convert to integer addresses
         """
+        points = self._check_in_bounds(points)
+        voxel_coordinates = np.floor((points-self.minimum_corner)/self.edge_length).astype(np.int64)
+
+        # now do the bit shifts
+        for col, this_shift in enumerate(self.shifts):
+            voxel_coordinates[:, col+1] = voxel_coordinates[:, col+1] << this_shift
+
+        # in this special case, bitwise or is the same as addition
+        voxel_addresses = voxel_coordinates.sum(1)
+        return voxel_addresses
 
     #==================================
+
+    def address_to_coordinate(self, addresses):
+        """
+        transform integer addresses into real-world coordinates
+        """
 
     #==================================
 
