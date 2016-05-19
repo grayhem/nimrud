@@ -13,9 +13,9 @@ MAX_ADDRESS_LENGTH = 64
 
 class VoxelFilter(object):
     """
-    given a 2d or 3d point cloud, define a cubic grid of specifid edge length enclosing it. exposes
+    given a 2d or 3d point cloud, define a cubic grid of specified edge length enclosing it. exposes
     methods for converting point coordinates (within the enclosed region) into 64bit integer
-    addresses (encoding grid coordinaes) and back into 2d/ 3d floating point coordinates.
+    addresses (encoding grid coordinates) and back into 2d/ 3d floating point coordinates.
     """
 
     def __init__(self, points, edge_length):
@@ -36,14 +36,18 @@ class VoxelFilter(object):
         self.maximum_corner = points.max(0) + edge_length / 2
         self.edge_length = edge_length
 
-        # now set the bit shifts for each dimension
-        self.shifts = self._calculate_shift()
+        # now set the bit shifts and widths for each dimension
+        self.shifts, self.widths = self._calculate_shift()
+
+        # and get the masks
+        self.masks = self._calculate_masks()
 
     #==================================
 
     def _calculate_shift(self):
         """
-        calculate the number of address bits each dimension gets
+        calculate the number of address bits each dimension gets, and return the address widths
+        while we're at it
         """
 
         span = self.maximum_corner - self.minimum_corner
@@ -55,7 +59,22 @@ class VoxelFilter(object):
         else:
             shifts = np.cumsum(address_widths)[:-1]
 
-        return shifts.astype(np.int64)
+        return shifts.astype(np.int64), address_widths.astype(np.int64)
+
+    #==================================
+
+    def _calculate_masks(self):
+        """
+        create a mask for extracting each coordinate axis' grid coordinate from the integer address
+        """
+
+        # stack '1' bits to the proper widths
+        masks = [int("0b" + "1" * this_width, base=2) for this_width in self.widths]
+        # now shift them as necessary
+        for num, this_shift in enumerate(self.shifts):
+            masks[num+1] = masks[num+1] << this_shift
+
+        return masks
 
     #==================================
 
@@ -101,10 +120,36 @@ class VoxelFilter(object):
         transform integer addresses into real-world coordinates
         """
 
+        # we might want to give it just one address.
+        addresses = np.atleast_1d(addresses)
+
+        # extract voxel coordinates
+        voxel_coordinate_list = [(addresses & this_mask).reshape(-1, 1) for this_mask in self.masks]
+        # shift back to the right
+        for num, this_shift in enumerate(self.shifts):
+            voxel_coordinate_list[num+1] = voxel_coordinate_list[num+1] >> this_shift
+        # get the right shape
+        voxel_coordinates = np.concatenate(voxel_coordinate_list, axis=1)
+        # bring them into real world coordinates (add a half edge length to get the center of the
+        # voxel, instead of the minimum corner)
+        points = voxel_coordinates * self.edge_length + self.minimum_corner + self.edge_length*0.5
+        return points
+
     #==================================
 
+    def unique_voxels(self, points):
+        """
+        return unique center coordinates of all grid cells that contain a point in "points"
+        """
 
+        # first convert to voxel addresses
+        addresses = self.coordinate_to_address(points)
+        # now unique
+        unique_addresses = np.unique(addresses)
+        # now back to real world coordinates
+        coordinates = self.address_to_coordinate(unique_addresses)
 
+        return coordinates
 
 #---------------------------------------------------------------------------------------------------
 

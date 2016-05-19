@@ -1,4 +1,4 @@
-# pylint: disable=E0401, E1101
+# pylint: disable=E0401, E1101, C0103
 
 """
 tests for the geometry module, encompassing voxel filtering and nested partitioning
@@ -106,6 +106,10 @@ def test_voxel_shift():
         vf = geometry.VoxelFilter(points, good_edge_length)
         assert np.array_equal(shifts, vf.shifts),\
             "computed incorrect shifts for {}d cloud".format(dim)
+        widths = [17, 17, 17][:dim]
+        assert np.array_equal(
+            widths,
+            vf.widths), "computed incorrect widths for {}d cloud".format(dim)
 
         # now, what about a voxel edge length that's incompatible with the point cloud shape?
         # we should detect that and raise a ValueError.
@@ -131,6 +135,26 @@ def test_voxel_shift():
             raise AssertionError\
             ("built a VoxelFilter for a space we should not be able to voxelize at dim {}".\
                 format(dim))
+
+#---------------------------------------------------------------------------------------------------
+
+def test_masks():
+    """
+    test that masks used to decalate addresses into grid coordinates are computed correctly
+    """
+
+    for dim in [2, 3]:
+        boundary_points = np.asarray([
+            [0, 0, 0],
+            [100, 100, 100]])[:, :dim]
+        edge_length = 1
+        vf = geometry.VoxelFilter(boundary_points, edge_length)
+        # each axis should have 7 bits
+        masks = [
+            0b1111111,
+            0b11111110000000,
+            0b111111100000000000000][:dim]
+        assert np.array_equal(masks, vf.masks), "computed masks incorrectly"
 
 #---------------------------------------------------------------------------------------------------
 
@@ -200,14 +224,36 @@ def test_voxel_address():
     assert address == vf.coordinate_to_address(test_point), "VoxelFilter computed wrong address"
 
 
-
 #---------------------------------------------------------------------------------------------------
 
 def test_voxel_transform():
     """
     convert integer addresses to point coordinates
     """
-    assert 1==2
+    
+    edge_length = 1
+    boundary_points = np.asarray([
+        [0, 0, 0],
+        [100, 100, 100]])
+    vf = geometry.VoxelFilter(boundary_points, edge_length)
+    
+    # we'll use the same address we used before
+    known_address = 198026
+    known_coordinates = np.arange(3)+10
+
+    assert np.allclose(
+        known_coordinates,
+        vf.address_to_coordinate(known_address).flatten()),\
+        "failed to recover correct coordinates in 3D"
+
+    # and a quick 2d test
+    vf = geometry.VoxelFilter(boundary_points[:, :2], edge_length)
+    assert np.allclose(
+        known_coordinates[:2],
+        vf.address_to_coordinate(
+            vf.coordinate_to_address(known_coordinates[:2]).flatten())),\
+        "failed to recover correct coordinates in 2D"
+
 
 #---------------------------------------------------------------------------------------------------
 
@@ -215,7 +261,22 @@ def test_voxel_unique():
     """
     convert point coordinates to integer addresses, unique and convert back to point coordinates
     """
-    assert 1==2
+    
+    for dim in [2, 3]:
+        boundary_points = np.asarray([
+            [0, 0, 0],
+            [100, 100, 100]])[:, :dim]
+        edge_length = 1
+        vf = geometry.VoxelFilter(boundary_points, edge_length)
+        # we should have 10 points here
+        test_points =\
+            np.concatenate([np.zeros((1, dim)) + offset for offset in np.arange(0, 20, 2)])
+        # 20, with 10 unique
+        duplicated_test_points = np.vstack((test_points, test_points))
+        unique_voxels = vf.unique_voxels(duplicated_test_points)
+        assert np.array_equal(test_points, unique_voxels),\
+            "failed to get correct set of unique voxels at dimension {}".format(dim)
+
 
 #---------------------------------------------------------------------------------------------------
 
@@ -240,6 +301,8 @@ if __name__ == '__main__':
     print("voxel filter initialized")
     test_voxel_shift()
     print("voxel filter shifts computed correctly")
+    test_masks()
+    print("masks computed correctly")
     test_in_bounds()
     print("boundary checking works")
     test_voxel_address()
