@@ -130,8 +130,8 @@ class VoxelFilter(object):
             voxel_coordinate_list[num+1] = voxel_coordinate_list[num+1] >> this_shift
         # get the right shape
         voxel_coordinates = np.concatenate(voxel_coordinate_list, axis=1)
-        # bring them into real world coordinates (add a half edge length to get the center of the
-        # voxel, instead of the minimum corner)
+        # bring them into real world coordinates
+        # (add a half edge length to get the center of the voxel, instead of the minimum corner)
         points = voxel_coordinates * self.edge_length + self.minimum_corner + self.edge_length*0.5
         return points
 
