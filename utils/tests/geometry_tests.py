@@ -312,3 +312,4 @@ if __name__ == '__main__':
     test_voxel_unique()
     print("unique voxel transform functions")
     print("that does it for the voxel filter")
+    print("testing nested partitions")

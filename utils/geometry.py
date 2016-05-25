@@ -151,9 +151,196 @@ class VoxelFilter(object):
 
         return coordinates
 
+    #==================================
+
+    def find_neighbors(self, address):
+        """
+        given an integer address, find the address of each directly adjacent voxel. 
+        up to 8 voxels are adjacent in 2D, and up to 26 in 3D.
+        """
+        # TODO: not relevant right now
+        raise NameError("find_neighbors not implemented yet")
+
+    def find_facing_neighbors(self, address):
+        """
+        given an integer address, find the address of each voxel sharing an edge (in 2D) or a face
+        (in 3D). up to 4 voxels will be adjacent in 2D, and 6 in 3D. 
+        """
+        # TODO: not relevant right now
+        raise NameError("find_facing_neighbors not implemented yet")
+
+
+#---------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------
 
+# nested partitioning:
+
+# given two colocated point clouds (representing query set and search space) partition both 
+# simultaneously such that the partitions of the query set enclose all of its points without
+# overlap, and partitions of the search space totally enclose all of the query set partitions,
+# extending past their boundaries in each coordinate direction by a fixed length. partitions of
+# the search space are constrained in their maximum number of member points, while partitions of
+# the query set are unbounded in population.
+
+# i have two ideas how to do this: 
+#   build an octree to get close and then evenly subdivide each leaf of the octree (if necessary)
+#       NestedOctree/ NestedGrid
+#   iteratively partition by glomming small cubic cells together
+#       ProceduralNestedPartitioner
+
+# both classes expose a public method partition_generator that iterates over the partitions they
+# create. the partition_generator yields a tuple (query_set_indices, search_space_indices)
+
+
+#---------------------------------------------------------------------------------------------------
+
+class NestedOctree(object):
+    """
+    recursive object for octree-like nested partitioning.
+    the structure resulting from a hierarchy of embedded NestedOctree instances is not strictly an
+    octree because each one computes its own bounds given a collection of points. therefore the
+    volume enclosed by the union of the bounding boxes of a parent tree's subtrees is 
+    nearly always smaller than the volume enclosed by the parent tree's bounding box.
+    """
+
+    def __init__(
+            self,
+            query_set,
+            search_space,
+            buffer_radius,
+            max_population,
+            minimum_factor=3):
+        """
+        when the object is initialized, it subdivides its region into 8 equal cubes.
+        for each of those cubes there are two options: ACCEPT or PARTITION.
+            ACCEPT is chosen if the cube population constraints are met.
+            PARTITION is chosen otherwise. then there are two more options: OCTREE or GRID.
+                OCTREE is chosen if the cube edge length is greater than 
+                    minimum_factor * buffer_radius. a NestedOctree is initialized for the cube.
+                GRID is chosen otherwise. a NestedGrid is initialized for the cube.
+        """
+        self.query_set = query_set
+        self.search_space = search_space
+
+    #==================================
+
+    def partition_generator(self):
+        """
+        iterate over the 8 cubes and yield tuples of (query_set_indices, search_space_indices)
+        """
+
+        for this_cube in self.cubes:
+            try:
+                for query_set_idx, search_space_idx in this_cube.partition_generator():
+                    yield query_set_idx, search_space_idx
+            except AttributeError:
+                yield this_cube
+
+    #==================================
+
+#-------------------------------------------------
+
+class NestedGrid(object):
+    """
+    single-level tree for nested partitioning. partitions are a set of identical cubes covering the
+    region of interest. cube radius is reduced until the search space population constraint is met.
+    """
+
+    def __init__(
+            self,
+            query_set,
+            search_space,
+            buffer_radius,
+            max_population):
+        self.query_set = query_set
+        self.search_space = search_space
+
+    #==================================
+
+    def partition_generator(self):
+        """
+        iterate over all cubes in the grid and yield tuples of 
+        (query_set_indices, search_space_indices)
+        """
+
+        for this_cube in self.cubes:
+            yield this_cube
+
+    #==================================
+
+#---------------------------------------------------------------------------------------------------
+    
+# this idea isn't totally fleshed out. as it stands now there is no guarantee against making
+# concave partitions, and we can't know if the search space is sparse enough to successfully
+# partition with the requested buffer radius without evaluating all possible partitions.
+
+# when this is done, partition some point clouds with it and visualize the results. 
+
+class ProceduralNestedPartitioner(object):
+    """
+    build a voxel space encompassing query set and search space
+    convert query set and search space into dictionaries of {int_address : index_array}
+    make a generator that does the following while cells remain in the query set dict:
+        pick a query set cell at random
+        use VoxelFilter.find_neighbors to find the addresses of every adjacent cell
+        look up those cells in the search space dictionary
+        count the total number of points in all of the search space cells
+        if total number of search space points is over the max:
+            pop the query cell from the query set dictionary
+            yield query set and search space indices
+            (we'll let the user decide what to do in this case)
+        else:
+            put the search space cell addresses in a set
+            put the query set cell address in a set
+            start a new set for rejected query set cells
+            start a new set for potential query set cells
+            while True:
+                find the face neighbors of the last added query set cell with 
+                    VoxelFilter.find_facing_neighbors and add those not in rejected query set or 
+                    accepted query set to potential query set.
+                    ??? what happens if we do not add any new cells to potential in this step ???
+                for _ in range(max_tries):
+                    find all adjacent cells of one cell in potential query set
+                    compute the union of these adjacent cells and the existing search set
+                    if the proposed search set is larger than the max population:
+                        move this query set cell to rejected query set cells
+                        remove this query set cell from the potential query set
+                    else:
+                        move this query set cell to accepted query set
+                        remove this query set cell from potential query set
+                        break
+                else:
+                    break
+            pop the accepted query set cells from the query set dict
+            cat and yield index arrays
+    """
+
+    def __init__(
+            self,
+            query_set,
+            search_space,
+            buffer_radius,
+            max_population,
+            num_tries=5):
+        raise NameError("ProceduralNestedPartitioner has not been implemented yet.")
+
+    #==================================
+
+    def partition_generator(self):
+        """
+        iteratively creates partitions of the given query set and search space. yields a tuple of
+        (query_set_indices, search_space_indices)
+        """
+
+
+    #==================================
 
 
 
+#---------------------------------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------
