@@ -1,8 +1,12 @@
 # pylint: disable=E0401
 
 """
-implements a class which facilitates point cloud classification by tracking associations between
+implements FlexCloud which facilitates point cloud classification by tracking associations between
 points, features and labels.
+
+stylish future upgrade for FlexCloud: subclass MutableMapping to index with keys like a dictionary.
+make each asset a key. use bracket notation with the facet name (__getitem__) to return an asset
+array.
 """
 
 import numpy as np

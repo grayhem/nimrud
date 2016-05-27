@@ -204,24 +204,48 @@ class NestedOctree(object):
     nearly always smaller than the volume enclosed by the parent tree's bounding box.
     """
 
-    def __init__(
-            self,
-            query_set,
-            search_space,
-            buffer_radius,
-            max_population,
-            minimum_factor=3):
+    def __init__(self, query_set, search_space, buffer_radius):
         """
-        when the object is initialized, it subdivides its region into 8 equal cubes.
-        for each of those cubes there are two options: ACCEPT or PARTITION.
-            ACCEPT is chosen if the cube population constraints are met.
-            PARTITION is chosen otherwise. then there are two more options: OCTREE or GRID.
-                OCTREE is chosen if the cube edge length is greater than 
-                    minimum_factor * buffer_radius. a NestedOctree is initialized for the cube.
-                GRID is chosen otherwise. a NestedGrid is initialized for the cube.
+        when the object is initialized, it sets the boundaries of the region to be partitioned.
+        query_set and search_space should be nx3 arrays with at least two elements. buffer_radius
+        must be >= 0.
         """
+
+        def validate_input(points):
+            """
+            check the shape of the point clouds
+            """
+            if points.ndim != 2:
+                raise ValueError("wrong point cloud array shape")
+            elif points.shape[1] != 3:
+                raise ValueError("only 3D spaces are supported")
+            elif points.shape[0] < 2:
+                raise ValueError("need at least 2 points to partition")
+
+        validate_input(query_set)
+        validate_input(search_space)
+        if buffer_radius <= 0:
+            raise ValueError("buffer radius cannot be negative")
+
         self.query_set = query_set
         self.search_space = search_space
+        self.buffer_radius = buffer_radius
+
+        # the bounds we are interested in belong to the query set
+        self.maximum_corner = query_set.max(0)
+        self.minimum_corner = query_set.min(0)
+
+    #==================================
+
+    def partition(self, max_population, minimum_factor=3):
+        """
+        if necessary, subdivide the region into 8 equal cubes.
+        for each of those cubes there are two options: OCTREE or GRID.
+            OCTREE is chosen if the cube edge length is greater than 
+                minimum_factor * buffer_radius. a NestedOctree is initialized for the cube.
+            GRID is chosen otherwise. a NestedGrid is initialized for the cube.
+        """
+
 
     #==================================
 

@@ -280,15 +280,102 @@ def test_voxel_unique():
 
 #---------------------------------------------------------------------------------------------------
 
+def test_octree_init():
+    """
+    initialize the NestedOctree and check the attributes it sets
+    """
+    num_points = 1000
+    scale = 10
+    buffer_radius = 0.5
+    search_space = np.random.rand(num_points, 3) * scale
+    query_set = np.random.rand(num_points, 3) * scale
+
+    tree = geometry.NestedOctree(query_set, search_space, buffer_radius)
+
+    assert tree.buffer_radius == buffer_radius, "buffer radius set wrong"
+    assert np.array_equal(tree.search_space, search_space), "search space set wrong"
+    assert np.array_equal(tree.query_set, query_set), "query set set wrong"
+
+    # bounds refer to the query set
+    known_max = query_set.max(0)
+    known_min = query_set.min(0)
+    assert np.array_equal(tree.maximum_corner, known_max), "max corner set wrong"
+    assert np.array_equal(tree.minimum_corner, known_min), "min corner set wrong"
+
+    bad_query_sets = [
+        query_set.flatten(),
+        query_set.reshape(-1, 2),
+        query_set.reshape(-1, 6),
+        query_set[0:1]]
+
+    for this_bad_query_set in bad_query_sets:
+        try:
+            tree = geometry.NestedOctree(this_bad_query_set, search_space, buffer_radius)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("accepted a query set with shape {}"\
+                    .format(this_bad_query_set.shape))
+
+    bad_search_spaces = [
+        search_space.flatten(),
+        search_space.reshape(-1, 2),
+        search_space.reshape(-1, 6),
+        search_space[0:1]]
+
+    for this_bad_search_space in bad_search_spaces:
+        try:
+            tree = geometry.NestedOctree(query_set, this_bad_search_space, buffer_radius)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("accepted a search space with shape {}"\
+                    .format(this_bad_search_space.shape))
+
+    # should not accept negative buffer radii
+    try:
+        tree = geometry.NestedOctree(query_set, search_space, -buffer_radius)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("accepted a negative buffer radius")
+
 
 #---------------------------------------------------------------------------------------------------
 
+def test_octree_partition_accept():
+    """
+    if the population of a NestedOctree search space _within the buffered bounds of the region of 
+    interest_ is acceptable, then it should create only one partition.
+    if it has only one partition, then why call it an octree?
+    """
+
+    # build a query set two search spaces
+
+    # first search space has fewer points than the max
+
+    # second search space has more points than the max, but within the query set ROI it has fewer.
+
+    # for each search space:
+
+        # build a NestedOctree
+
+        # partition it with a point count that should yield one partition
+
+        # check how many partitions we have
 
 #---------------------------------------------------------------------------------------------------
 
+def test_octree_partition_octree():
+    """
+    
+    """
 
 #---------------------------------------------------------------------------------------------------
 
+def test_octree_partition_grid():
+    """
+    """
 
 #---------------------------------------------------------------------------------------------------
 
@@ -313,3 +400,10 @@ if __name__ == '__main__':
     print("unique voxel transform functions")
     print("that does it for the voxel filter")
     print("testing nested partitions")
+    test_octree_init()
+    print("octree initialized")
+    test_octree_partition_accept()
+    test_octree_partition_octree()
+    test_octree_partition_grid()
+    print("octree partitioned correctly")
+
