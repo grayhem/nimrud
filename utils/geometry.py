@@ -192,6 +192,44 @@ class VoxelFilter(object):
 # both classes expose a public method partition_generator that iterates over the partitions they
 # create. the partition_generator yields a tuple (query_set_indices, search_space_indices)
 
+def nested_regions(
+        query_set,
+        search_space,
+        buffer_radius,
+        minimum_corner,
+        maximum_corner):
+    """
+    return the indices of every query set and search space point in given region of interest,
+    defined with respect to the query set.
+    """
+
+    def region_indices(points, low_side, high_side):
+        """
+        return indices of all points between low_side and high_side 
+        """
+        all_masks = []
+        for dimension, (low_coordinate, high_coordinate) in enumerate(zip(low_side, high_side)):
+            point_column = points[:, dimension]
+            all_masks.append(
+                np.logical_and(
+                    point_column >= low_coordinate,
+                    point_column <= high_coordinate))
+        final_mask = np.logical_and.reduce(all_masks, axis=0)
+        # these are all equivalent
+        # return np.where(final_mask)[0]
+        # return np.extract(final_mask, np.arange(points.shape[0]))
+        return final_mask.nonzero()[0]
+
+    # first the query set
+    query_indices = region_indices(query_set, minimum_corner, maximum_corner)
+
+    # now the search space
+    search_indices = region_indices(
+        search_space,
+        minimum_corner - buffer_radius,
+        maximum_corner + buffer_radius)
+
+    return query_indices, search_indices
 
 #---------------------------------------------------------------------------------------------------
 
@@ -231,9 +269,12 @@ class NestedOctree(object):
         self.search_space = search_space
         self.buffer_radius = buffer_radius
 
-        # the bounds we are interested in belong to the query set
+        # the bounds we are interested in are the extents of the query set
         self.maximum_corner = query_set.max(0)
         self.minimum_corner = query_set.min(0)
+
+        # we will be filling this later
+        self.cubes = []
 
     #==================================
 
@@ -245,7 +286,31 @@ class NestedOctree(object):
                 minimum_factor * buffer_radius. a NestedOctree is initialized for the cube.
             GRID is chosen otherwise. a NestedGrid is initialized for the cube.
         """
+        # first get the indices of all points in the regions of interest
+        local_indices = nested_regions(
+            self.query_set,
+            self.search_space,
+            self.buffer_radius,
+            self.minimum_corner,
+            self.maximum_corner)
 
+        # if we're good to go, then we're done here
+        if local_indices[1].size <= max_population:
+            self.cubes.append(local_indices)
+        else:
+            pass
+
+    #==================================
+
+    def _cube_generator(self):
+        """
+        yield query set and search space point clouds for each of the 8 cubes.
+        """
+
+        # use nested calls to nested_regions-- 3 layers deep.
+        # is it better to take at each layer, or only take once at the end after doing an 
+        # intersection on all layers?
+        # the answer is not obvious to me right now.
 
     #==================================
 

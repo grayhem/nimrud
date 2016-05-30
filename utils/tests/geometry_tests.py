@@ -295,6 +295,7 @@ def test_octree_init():
     assert tree.buffer_radius == buffer_radius, "buffer radius set wrong"
     assert np.array_equal(tree.search_space, search_space), "search space set wrong"
     assert np.array_equal(tree.query_set, query_set), "query set set wrong"
+    assert tree.cubes == [], "didn't initialize cube list"
 
     # bounds refer to the query set
     known_max = query_set.max(0)
@@ -340,6 +341,33 @@ def test_octree_init():
     else:
         raise AssertionError("accepted a negative buffer radius")
 
+#---------------------------------------------------------------------------------------------------
+
+def test_nested_regions():
+    """
+    assert that nested_regions returns indices to the correct points
+    """
+
+    query_set = np.random.rand(5000, 3) # 0,0,0 to 1,1,1
+    search_space = np.random.rand(20000, 3) * 3 - 1  # -1,-1,-1 to 2,2,2
+    minimum_corner = np.array([0.25, 0.25, 0.25])
+    maximum_corner = np.array([0.75, 0.75, 0.75])
+    buffer_radius = 0.5
+
+    query_set_index, search_space_index = geometry.nested_regions(
+        query_set,
+        search_space,
+        buffer_radius,
+        minimum_corner,
+        maximum_corner)
+
+    cull_query_set = query_set.take(query_set_index, axis=0)
+    cull_search_space = search_space.take(search_space_index, axis=0)
+    assert all(cull_query_set.min(0) >= minimum_corner), "query set min error" 
+    assert all(cull_query_set.max(0) <= maximum_corner), "query set max error" 
+    assert all(cull_search_space.min(0) >= minimum_corner - buffer_radius), "search space min error" 
+    assert all(cull_search_space.max(0) <= maximum_corner + buffer_radius), "search space max error" 
+
 
 #---------------------------------------------------------------------------------------------------
 
@@ -350,19 +378,37 @@ def test_octree_partition_accept():
     if it has only one partition, then why call it an octree?
     """
 
-    # build a query set two search spaces
+    # build a query set and two search spaces
+    query_set = np.random.rand(1000, 3)
 
     # first search space has fewer points than the max
+    search_space_low = np.random.rand(999, 3)
+
+    max_population = 1000
+    buffer_radius = 0.01    # just as long as this is smaller than about 100 it doesn't matter here
 
     # second search space has more points than the max, but within the query set ROI it has fewer.
+    search_space_high = np.vstack((
+        search_space_low,
+        np.random.rand(1000, 3) + 100))
 
     # for each search space:
-
+    for num, this_search_space in enumerate([search_space_low, search_space_high]):
         # build a NestedOctree
-
+        tree = geometry.NestedOctree(query_set, this_search_space, buffer_radius)
         # partition it with a point count that should yield one partition
+        tree.partition(max_population)
 
         # check how many partitions we have
+        assert len(tree.cubes) == 1,\
+            "got {} partitions on search space {}. expected 1.".format(len(tree.cubes), num)
+
+#---------------------------------------------------------------------------------------------------
+
+def test_octree_cube_generator():
+    """
+    
+    """
 
 #---------------------------------------------------------------------------------------------------
 
@@ -370,6 +416,7 @@ def test_octree_partition_octree():
     """
     
     """
+    assert False
 
 #---------------------------------------------------------------------------------------------------
 
@@ -377,6 +424,7 @@ def test_octree_partition_grid():
     """
     """
 
+    assert False
 #---------------------------------------------------------------------------------------------------
 
 
@@ -400,6 +448,8 @@ if __name__ == '__main__':
     print("unique voxel transform functions")
     print("that does it for the voxel filter")
     print("testing nested partitions")
+    test_nested_regions()
+    print("nested regions found")
     test_octree_init()
     print("octree initialized")
     test_octree_partition_accept()
