@@ -4,6 +4,8 @@
 implements a voxel filter and a spatial partitioning algorithm
 """
 
+from itertools import product
+
 import numpy as np
 
 
@@ -192,6 +194,12 @@ class VoxelFilter(object):
 # both classes expose a public method partition_generator that iterates over the partitions they
 # create. the partition_generator yields a tuple (query_set_indices, search_space_indices)
 
+# it would also be possible to divide the point cloud using other kinds of tree. if we had an
+# extreme aspect ratio we could come up with other partitioning rules to get it closer to a cube
+# before starting the octree. the reason we're using an octree in the first place, of course, is
+# that cubic regions leads to less redundant processing of the search space for any given
+# distribution of query set points.
+
 def nested_regions(
         query_set,
         search_space,
@@ -208,17 +216,30 @@ def nested_regions(
         return indices of all points between low_side and high_side 
         """
         all_masks = []
+        # we can cheat a little here. if no points would be excluded by applying a thresholding
+        # rule, we can skip it.
+        lowest_point = points.min(0)
+        highest_point = points.max(0)
         for dimension, (low_coordinate, high_coordinate) in enumerate(zip(low_side, high_side)):
             point_column = points[:, dimension]
-            all_masks.append(
-                np.logical_and(
-                    point_column >= low_coordinate,
-                    point_column <= high_coordinate))
-        final_mask = np.logical_and.reduce(all_masks, axis=0)
-        # these are all equivalent
-        # return np.where(final_mask)[0]
-        # return np.extract(final_mask, np.arange(points.shape[0]))
-        return final_mask.nonzero()[0]
+            # are there points below the low bound?
+            if lowest_point[dimension] < low_coordinate:
+                all_masks.append(point_column >= low_coordinate)
+            # or above the high bound?
+            if highest_point[dimension] > high_coordinate:
+                all_masks.append(point_column <= high_coordinate)
+
+        if len(all_masks):
+            # logical_and.reduce will happily return a True if you pass it an empty list.
+            final_mask = np.logical_and.reduce(all_masks, axis=0)
+
+            # these are all equivalent:
+            # return np.where(final_mask)[0]
+            # return np.extract(final_mask, np.arange(points.shape[0]))
+            return final_mask.nonzero()[0]
+        else:
+            # if no points would be excluded by our constraints, just return the full index set
+            return np.arange(points.shape[0])
 
     # first the query set
     query_indices = region_indices(query_set, minimum_corner, maximum_corner)
@@ -276,6 +297,13 @@ class NestedOctree(object):
         # we will be filling this later
         self.cubes = []
 
+        # these are the algorithms we can use to get our 8 cubes
+        self.cube_generators = {
+            "naive": self._naive_cube_generator,
+            "take_one": self._take_one_cube_generator,
+            "take_three": self._take_three_cube_generator
+        }
+
     #==================================
 
     def partition(self, max_population, minimum_factor=3):
@@ -294,23 +322,77 @@ class NestedOctree(object):
             self.minimum_corner,
             self.maximum_corner)
 
-        # if we're good to go, then we're done here
+        # if the population is low enough in the extant bounding box, then we're done here
         if local_indices[1].size <= max_population:
             self.cubes.append(local_indices)
         else:
+            # edge length of one of the query set cubes we will generate
+            cube_edge = max(self.maximum_corner - self.minimum_corner) * 0.5
             pass
 
     #==================================
 
-    def _cube_generator(self):
+    def cube_generator(self, cube_edge, algorithm="naive"):
         """
         yield query set and search space point clouds for each of the 8 cubes.
+        algorithm parameter should be one of ["naive", "take_one", "take_three"]
         """
 
         # use nested calls to nested_regions-- 3 layers deep.
         # is it better to take at each layer, or only take once at the end after doing an 
         # intersection on all layers?
-        # the answer is not obvious to me right now.
+        # the answer is not obvious to me right now. we'll start with the naive implementation,
+        # which simply brute forces each cube pair.
+
+        # to test, we'll implement all three and use an argument to access each. we can then make
+        # point clouds of a variety of sizes and partition them all with the cube generator and
+        # maybe come up with some insights as to which to use under which circumstances.
+
+        try:
+            cube_generator_function = self.cube_generators[algorithm]
+        except KeyError:
+            raise NameError("{} is not an acceptable cube generator algorithm".format(algorithm))
+
+        for cube in cube_generator_function(cube_edge):
+            yield cube
+            
+    #==================================
+
+    def _naive_cube_generator(self, cube_edge):
+        """
+        naive implementation of the cube generator algorithm
+        """
+        # get the bounds of each cube
+        cube_centers = np.asarray(list(product([0, 1], repeat=3)))
+        known_min_corners = cube_centers * cube_edge + self.minimum_corner
+        known_max_corners = known_min_corners + cube_edge
+
+        # iterate over those bounds
+        for this_minimum_corner, this_maximum_corner in\
+            zip(known_min_corners, known_max_corners):
+            # get indexes to each pair of bounds
+            query_index, search_index = nested_regions(
+                self.query_set,
+                self.search_space,
+                self.buffer_radius,
+                this_minimum_corner,
+                this_maximum_corner)
+            # and yield the actual points
+            yield self.query_set.take(query_index, axis=0),\
+                self.search_space.take(search_index, axis=0)
+
+    #==================================
+
+    def _take_one_cube_generator(self, cube_edge):
+        """
+        alternative implementation of the cube generator which uses 
+        """
+        pass
+
+    #==================================
+
+    def _take_three_cube_generator(self, cube_edge):
+        pass
 
     #==================================
 

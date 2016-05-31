@@ -4,6 +4,7 @@
 tests for the geometry module, encompassing voxel filtering and nested partitioning
 """
 
+from itertools import product
 import numpy as np
 
 from nimrud.utils import geometry
@@ -341,6 +342,12 @@ def test_octree_init():
     else:
         raise AssertionError("accepted a negative buffer radius")
 
+    # and we need our cube generator algorithms
+    algorithms = ["naive", "take_one", "take_three"]
+    for this_algorithm in algorithms:
+        assert this_algorithm in tree.cube_generators,\
+            "missing cube generator algorithm {}".format(this_algorithm)
+
 #---------------------------------------------------------------------------------------------------
 
 def test_nested_regions():
@@ -368,6 +375,18 @@ def test_nested_regions():
     assert all(cull_search_space.min(0) >= minimum_corner - buffer_radius), "search space min error" 
     assert all(cull_search_space.max(0) <= maximum_corner + buffer_radius), "search space max error" 
 
+    # now but what happens if we try to extract a region with no points?
+    minimum_corner = np.ones(3) * 100
+    maximum_corner = minimum_corner + 10
+
+    query_set_index, search_space_index = geometry.nested_regions(
+        query_set,
+        search_space,
+        buffer_radius,
+        minimum_corner,
+        maximum_corner)
+    assert query_set_index.size == 0, "returned indices for empty region in query set"
+    assert search_space_index.size == 0, "returned indices for empty region in search space"    
 
 #---------------------------------------------------------------------------------------------------
 
@@ -407,9 +426,84 @@ def test_octree_partition_accept():
 
 def test_octree_cube_generator():
     """
-    
+    cube_generator yields 8 cubic nested regions covering the query set bounds of the NestedOctree
     """
 
+    # testing the bounds-finding logic (using itertools.product).
+    # it should work on any arbitrary coordinates.
+    offsets = [
+        np.zeros(3),
+        np.random.rand(3)]
+
+    cube_edge = 0.5
+    buffer_radius = 0.1
+
+    def is_in_bounds(points, min_bounds, max_bounds):
+        """
+        return bool indicating whether given points are included in given bounds
+        """
+        return all(points.min(0) >= min_bounds), all(points.max(0) <= max_bounds)
+
+    algorithms = [
+        "naive",
+        "take_one",
+        "take_three"]
+
+    for algorithm in algorithms:
+        for this_offset in offsets:
+            query_set = np.random.rand(1000, 3) * 2 * cube_edge
+            search_space = np.random.rand(4000, 3) * 4 * cube_edge- 0.5
+            # just so we know what the bounds are a priori
+            query_set[0] *= 0
+            query_set[1] *= 0
+            query_set[1] += 2 * cube_edge
+            # and apply the offset
+            query_set += this_offset
+            search_space += this_offset
+            minimum_corner = query_set.min(0)
+
+            tree = geometry.NestedOctree(query_set, search_space, buffer_radius)
+
+            # this this the part that could get goofed up w/r/t the arbitrary coordinate offset
+            known_centers = np.asarray(list(product([0, 1], repeat=3)))
+            known_min_corners = known_centers * cube_edge + minimum_corner
+            known_max_corners = known_min_corners + cube_edge
+            # print("min corner {}".format(minimum_corner))
+            # print("max corner {}".format(maximum_corner))
+            # for mi, ma in zip(known_min_corners, known_max_corners):
+            #     print("min {}".format(mi))
+            #     print("max {}".format(ma))
+
+            # get the right number of cubes (8)
+            assert len(list(tree.cube_generator(cube_edge, algorithm=algorithm))) == 8,\
+                "failed to generate 8 cubes at offset {} using algorithm {}".format(
+                    this_offset,
+                    algorithm)
+
+            # get the right cubes in the right order. we enforce the right order because it's
+            # easier to test than getting any arbitrary order.
+            for num, (query_cube, search_cube) in\
+                enumerate(tree.cube_generator(cube_edge, algorithm=algorithm)):
+                low = known_min_corners[num]
+                high = known_max_corners[num]
+                assert is_in_bounds(query_cube, low, high),\
+                    "query cube {} failed at offset {}".format(num, this_offset)
+
+                assert is_in_bounds(search_cube, low - buffer_radius, high + buffer_radius),\
+                    "search cube {} failed at offset {}".format(num, this_offset)
+
+    # now try with a bogus algorithm
+    try:
+        gen = tree.cube_generator(cube_edge, algorithm="bogus")
+    except NameError:
+        raise AssertionError("failed to raise a NameError on a nonexistent algorithm choice")
+
+#---------------------------------------------------------------------------------------------------
+
+def performance_octree_cube_generator():
+    """
+    test the performance of the various cube generator algorithms
+    """
 #---------------------------------------------------------------------------------------------------
 
 def test_octree_partition_octree():
@@ -452,6 +546,8 @@ if __name__ == '__main__':
     print("nested regions found")
     test_octree_init()
     print("octree initialized")
+    test_octree_cube_generator()
+    print("cubes generated")
     test_octree_partition_accept()
     test_octree_partition_octree()
     test_octree_partition_grid()
